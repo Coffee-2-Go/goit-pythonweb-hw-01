@@ -1,6 +1,7 @@
 # Module for managing a library of books using the Facade pattern
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import List
 import logging
 
@@ -14,14 +15,47 @@ console_handler.setLevel(logging.INFO)
 formatter = logging.Formatter("%(message)s")
 console_handler.setFormatter(formatter)
 
-logger.addHandler(console_handler)
+if not logger.handlers:
+    logger.addHandler(console_handler)
 
 
+@dataclass
 class Book:
-    def __init__(self, title: str, author: str, year: str) -> None:
-        self.title: str = title
-        self.author: str = author
-        self.year: str = year
+    title: str
+    author: str
+    year: int
+
+
+class BookStorage(ABC):
+    @abstractmethod
+    def add(self, book: Book) -> None:
+        pass
+
+    @abstractmethod
+    def remove_by_title(self, title: str) -> bool:
+        pass
+
+    @abstractmethod
+    def get_all(self) -> list[Book]:
+        pass
+
+
+class ListBookStorage(BookStorage):
+    def __init__(self) -> None:
+        self._books: list[Book] = []
+
+    def add(self, book: Book) -> None:
+        self._books.append(book)
+
+    def remove_by_title(self, title: str) -> bool:
+        for i, book in enumerate(self._books):
+            if book.title.lower() == title.lower():
+                del self._books[i]
+                return True
+        return False
+
+    def get_all(self) -> list[Book]:
+        return self._books.copy()
 
 
 class LibraryInterface(ABC):
@@ -34,47 +68,57 @@ class LibraryInterface(ABC):
         pass
 
     @abstractmethod
-    def show_books(self) -> None:
+    def list_books(self) -> list[Book]:
         pass
 
 
 class Library(LibraryInterface):
-    def __init__(self) -> None:
-        self.books: List[Book] = []
+    def __init__(self, storage: BookStorage) -> None:
+        self.storage = storage
 
     def add_book(self, book: Book) -> None:
-        self.books.append(book)
+        self.storage.add(book)
 
-    def remove_book(self, title: str) -> None:
-        for book in self.books:
-            if book.title == title:
-                self.books.remove(book)
-                break
+    def remove_book(self, title: str) -> bool:
+        return self.storage.remove_by_title(title)
 
-    def show_books(self) -> None:
-        for book in self.books:
-            logger.info(
-                f"Title: {book.title}, Author: {book.author}, Year: {book.year}"
-            )
+    def list_books(self) -> list[Book]:
+        return self.storage.get_all()
 
 
 class LibraryManager:
     def __init__(self, library: LibraryInterface) -> None:
         self.library = library
 
-    def add_book(self, title: str, author: str, year: str) -> None:
-        book = Book(title, author, year)
-        self.library.add_book(book)
+    def add_book(self, title: str, author: str, year: int) -> bool:
+        if not title or not author:
+            return False
+
+        try:
+            year_int = int(year)
+        except ValueError:
+            return False
+
+        self.library.add_book(Book(title, author, year_int))
+        return True
 
     def remove_book(self, title: str) -> None:
         self.library.remove_book(title)
 
-    def show_books(self) -> None:
-        self.library.show_books()
+    def show_books(self) -> bool:
+        if not self.library.list_books():
+            logger.info("Library is empty.")
+            return False
+
+        for book in self.library.list_books():
+            logger.info(
+                f"Title: {book.title}, Author: {book.author}, Year: {book.year}"
+            )
+        return True
 
 
 def main() -> None:
-    library = Library()
+    library = Library(ListBookStorage())
     manager = LibraryManager(library)
 
     while True:
